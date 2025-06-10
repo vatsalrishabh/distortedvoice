@@ -128,7 +128,6 @@ export default function Home() {
       pcRef.current.addTrack(track, dest.stream);
     });
 
-    localAudioRef.current.srcObject = source._stream;
     setLocalStream(dest.stream);
 
     const offer = await pcRef.current.createOffer();
@@ -166,7 +165,6 @@ export default function Home() {
       pcRef.current.addTrack(track, dest.stream);
     });
 
-    localAudioRef.current.srcObject = source._stream;
     setLocalStream(dest.stream);
 
     socket.emit("answer", { to: incomingCall.from, answer });
@@ -321,7 +319,7 @@ export default function Home() {
             <div className="flex flex-col md:flex-row gap-10 mt-8 justify-center items-center animate-fade-in">
               <div className="bg-white/10 rounded-xl p-4 shadow-lg flex flex-col items-center border border-white/20">
                 <h2 className="text-lg font-medium mb-2 text-white/80">Your Voice</h2>
-                <audio ref={localAudioRef} autoPlay controls className="w-64 rounded-lg shadow" />
+                <audio ref={localAudioRef} autoPlay controls muted className="w-64 rounded-lg shadow" />
               </div>
               <div className="bg-white/10 rounded-xl p-4 shadow-lg flex flex-col items-center border border-white/20">
                 <h2 className="text-lg font-medium mb-2 text-white/80">Their Voice</h2>
