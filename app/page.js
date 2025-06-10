@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import io from "socket.io-client";
 import * as Tone from "tone";
+import { FaPhone, FaPhoneSlash, FaMicrophone, FaMicrophoneSlash, FaUserCircle } from "react-icons/fa";
+import { MdCallEnd } from "react-icons/md";
 
 const socket = io("https://distortedvoice-express.onrender.com");
 
@@ -201,113 +203,155 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-6 p-8">
-      <h1 className="text-2xl font-bold mb-4">Voice Changer Call</h1>
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-indigo-900 via-purple-900 to-blue-900 transition-all duration-500">
+      <div className="bg-white/10 backdrop-blur-md rounded-3xl shadow-2xl p-8 w-full max-w-2xl mt-8 border border-white/20 animate-fade-in">
+        <h1 className="text-3xl font-extrabold text-white text-center mb-8 tracking-tight drop-shadow-lg">
+          <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+            Distorted Voice Call
+          </span>
+        </h1>
 
-      {/* Username registration */}
-      {!registered ? (
-        <form onSubmit={handleRegister} className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Enter unique name"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="px-3 py-2 border rounded"
-            minLength={3}
-            required
-          />
-          <button
-            type="submit"
-            className="bg-blue-600 text-white px-4 py-2 rounded"
-            disabled={username.length < 3}
-          >
-            Submit
-          </button>
-        </form>
-      ) : (
-        <>
-          {/* User list */}
-          <div className="w-full max-w-md">
-            <h2 className="text-lg font-semibold mb-2">Users Online</h2>
-            <ul className="space-y-2">
-              {connectedUsers.length === 0 && (
-                <li className="text-gray-500">No users available</li>
-              )}
-              {connectedUsers.map((user) => (
-                <li key={user} className="flex justify-between items-center border-b pb-1">
-                  <span>{user}</span>
-                  <button
-                    onClick={() => callUser(user)}
-                    disabled={isCalling || inCall}
-                    className="bg-green-600 text-white px-3 py-1 rounded disabled:opacity-50"
-                    title="Call"
+        {/* Username registration */}
+        {!registered ? (
+          <form onSubmit={handleRegister} className="flex flex-col items-center gap-4 animate-fade-in">
+            <input
+              type="text"
+              placeholder="Enter unique name"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="px-5 py-3 rounded-xl border-none shadow-md focus:ring-2 focus:ring-blue-400 focus:outline-none text-lg w-72 bg-white/70 placeholder-gray-500 transition-all duration-200"
+              minLength={3}
+              required
+            />
+            <button
+              type="submit"
+              className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-purple-500 hover:to-blue-500 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:scale-105 transition-all duration-200"
+              disabled={username.length < 3}
+            >
+              <FaUserCircle className="text-xl" />
+              Join
+            </button>
+          </form>
+        ) : (
+          <>
+            {/* User list */}
+            <div className="w-full max-w-md mx-auto mb-8 animate-fade-in">
+              <h2 className="text-lg font-semibold mb-3 text-white/90">Users Online</h2>
+              <ul className="space-y-2">
+                {connectedUsers.length === 0 && (
+                  <li className="text-gray-300">No users available</li>
+                )}
+                {connectedUsers.map((user) => (
+                  <li
+                    key={user}
+                    className="flex justify-between items-center bg-white/10 rounded-xl px-4 py-2 shadow hover:bg-gradient-to-r hover:from-blue-400/30 hover:to-purple-400/30 transition-all duration-200"
                   >
-                    📞
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
+                    <span className="flex items-center gap-2 text-white font-medium">
+                      <FaUserCircle className="text-blue-300" /> {user}
+                    </span>
+                    <button
+                      onClick={() => callUser(user)}
+                      disabled={isCalling || inCall}
+                      className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-blue-500 hover:from-blue-500 hover:to-green-500 text-white px-4 py-2 rounded-full shadow-lg hover:scale-110 transition-all duration-200 disabled:opacity-50"
+                      title="Call"
+                    >
+                      <FaPhone className="text-lg" />
+                      Call
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-          {/* Incoming call modal */}
-          {incomingCall && (
-            <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
-              <div className="bg-white p-6 rounded shadow-lg flex flex-col items-center">
-                <p className="mb-4 font-semibold">
-                  Incoming call from <span className="text-blue-600">{incomingCall.from}</span>
-                </p>
+            {/* Incoming call modal */}
+            {incomingCall && (
+              <div className="fixed inset-0 flex items-center justify-center bg-black/60 z-50 animate-fade-in-fast">
+                <div className="bg-white/90 p-8 rounded-2xl shadow-2xl flex flex-col items-center border-2 border-blue-400 animate-pop-in">
+                  <p className="mb-4 font-semibold text-lg text-blue-900">
+                    Incoming call from <span className="text-purple-700">{incomingCall.from}</span>
+                  </p>
+                  <div className="flex gap-6">
+                    <button
+                      onClick={acceptCall}
+                      className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:scale-110 transition-all duration-150"
+                    >
+                      <FaPhone className="text-xl" /> Accept
+                    </button>
+                    <button
+                      onClick={declineCall}
+                      className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:scale-110 transition-all duration-150"
+                    >
+                      <FaPhoneSlash className="text-xl" /> Decline
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Call controls */}
+            {inCall && (
+              <div className="flex flex-col items-center gap-4 mt-4 animate-fade-in">
+                <span className="font-medium text-green-200 text-lg tracking-wide drop-shadow">
+                  In call with <span className="text-blue-200">{targetUser}</span>
+                </span>
                 <div className="flex gap-4">
                   <button
-                    onClick={acceptCall}
-                    className="bg-green-600 text-white px-4 py-2 rounded"
+                    onClick={toggleMute}
+                    className={`flex items-center gap-2 px-6 py-2 rounded-full font-bold shadow-lg transition-all duration-150 ${
+                      isMuted
+                        ? "bg-yellow-400 hover:bg-yellow-500 text-gray-900"
+                        : "bg-gray-700 hover:bg-gray-900 text-white"
+                    }`}
                   >
-                    Accept
+                    {isMuted ? <FaMicrophoneSlash className="text-xl" /> : <FaMicrophone className="text-xl" />}
+                    {isMuted ? "Unmute" : "Mute"}
                   </button>
                   <button
-                    onClick={declineCall}
-                    className="bg-red-600 text-white px-4 py-2 rounded"
+                    onClick={endCall}
+                    className="flex items-center gap-2 bg-gradient-to-r from-red-500 to-pink-500 hover:from-pink-500 hover:to-red-500 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:scale-110 transition-all duration-150"
                   >
-                    Decline
+                    <MdCallEnd className="text-xl" />
+                    End Call
                   </button>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Call controls */}
-          {inCall && (
-            <div className="flex flex-col items-center gap-2 mt-4">
-              <span className="font-medium text-green-700">
-                In call with {targetUser}
-              </span>
-              <button
-                onClick={toggleMute}
-                className={`px-4 py-2 rounded ${isMuted ? "bg-yellow-500" : "bg-gray-600"} text-white`}
-              >
-                {isMuted ? "Unmute" : "Mute"}
-              </button>
-              <button
-                onClick={endCall}
-                className="bg-red-600 text-white px-4 py-2 rounded"
-              >
-                End Call
-              </button>
+            {/* Audio panels */}
+            <div className="flex flex-col md:flex-row gap-10 mt-8 justify-center items-center animate-fade-in">
+              <div className="bg-white/10 rounded-xl p-4 shadow-lg flex flex-col items-center border border-white/20">
+                <h2 className="text-lg font-medium mb-2 text-white/80">Your Voice</h2>
+                <audio ref={localAudioRef} autoPlay controls className="w-64 rounded-lg shadow" />
+              </div>
+              <div className="bg-white/10 rounded-xl p-4 shadow-lg flex flex-col items-center border border-white/20">
+                <h2 className="text-lg font-medium mb-2 text-white/80">Their Voice</h2>
+                <audio ref={remoteAudioRef} autoPlay controls className="w-64 rounded-lg shadow" />
+              </div>
             </div>
-          )}
+          </>
+        )}
+      </div>
 
-          {/* Audio panels */}
-          <div className="flex flex-col md:flex-row gap-10 mt-6">
-            <div>
-              <h2 className="text-lg font-medium mb-2">Local Audio</h2>
-              <audio ref={localAudioRef} autoPlay controls className="w-64" />
-            </div>
-            <div>
-              <h2 className="text-lg font-medium mb-2">Remote Audio</h2>
-              <audio ref={remoteAudioRef} autoPlay controls className="w-64" />
-            </div>
-          </div>
-        </>
-      )}
+      {/* Animations */}
+      <style jsx global>{`
+        .animate-fade-in {
+          animation: fadeIn 1s;
+        }
+        .animate-fade-in-fast {
+          animation: fadeIn 0.3s;
+        }
+        .animate-pop-in {
+          animation: popIn 0.4s cubic-bezier(.68,-0.55,.27,1.55);
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(30px);}
+          to { opacity: 1; transform: translateY(0);}
+        }
+        @keyframes popIn {
+          0% { opacity: 0; transform: scale(0.7);}
+          100% { opacity: 1; transform: scale(1);}
+        }
+      `}</style>
     </div>
   );
 }
