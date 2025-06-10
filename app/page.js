@@ -1,103 +1,156 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import io from "socket.io-client";
+import VoiceChanger from "voice-changer";
+
+const socket = io(undefined, { path: "/api/socket" });
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const localAudioRef = useRef();
+  const remoteAudioRef = useRef();
+  const pcRef = useRef(null);
+  const [username, setUsername] = useState("");
+  const [connectedUsers, setConnectedUsers] = useState([]);
+  const [targetUser, setTargetUser] = useState("");
+  const [isCalling, setIsCalling] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  useEffect(() => {
+    socket.on("connect", () => {
+      console.log("Connected to socket server");
+    });
+
+    socket.on("users", (users) => {
+      setConnectedUsers(users.filter((u) => u !== username));
+    });
+
+    socket.on("username-error", (msg) => {
+      alert(msg);
+      setUsername("");
+    });
+
+    socket.on("offer", async ({ from, offer }) => {
+      setTargetUser(from);
+      if (!pcRef.current) createPeerConnection(from);
+      await pcRef.current.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await pcRef.current.createAnswer();
+      await pcRef.current.setLocalDescription(answer);
+      socket.emit("answer", { to: from, answer });
+    });
+
+    socket.on("answer", async ({ answer }) => {
+      await pcRef.current.setRemoteDescription(new RTCSessionDescription(answer));
+    });
+
+    socket.on("ice-candidate", async ({ candidate }) => {
+      try {
+        await pcRef.current.addIceCandidate(candidate);
+      } catch (e) {
+        console.error("Error adding ICE candidate", e);
+      }
+    });
+  }, [username]);
+
+  const createPeerConnection = (to) => {
+    pcRef.current = new RTCPeerConnection();
+
+    pcRef.current.ontrack = (event) => {
+      remoteAudioRef.current.srcObject = event.streams[0];
+    };
+
+    pcRef.current.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit("ice-candidate", { to, candidate: event.candidate });
+      }
+    };
+  };
+
+  const handleRegister = () => {
+    if (username) {
+      socket.emit("register", username);
+    }
+  };
+
+  const callUser = async (user) => {
+    setTargetUser(user);
+    createPeerConnection(user);
+    setIsCalling(true);
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const audioCtx = new AudioContext();
+    const source = audioCtx.createMediaStreamSource(stream);
+
+    const voiceChanger = new VoiceChanger(audioCtx);
+    voiceChanger.setPitch(1.5); // example pitch
+    voiceChanger.setFormant(1.2);
+    voiceChanger.setWet(1.0);
+    voiceChanger.connect(source);
+
+    const dest = audioCtx.createMediaStreamDestination();
+    voiceChanger.output.connect(dest);
+
+    dest.stream.getTracks().forEach((track) => {
+      pcRef.current.addTrack(track, dest.stream);
+    });
+
+    localAudioRef.current.srcObject = stream;
+
+    const offer = await pcRef.current.createOffer();
+    await pcRef.current.setLocalDescription(offer);
+    socket.emit("offer", { to: user, offer });
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen gap-6 p-8">
+      <h1 className="text-2xl font-bold">Voice Changer Call</h1>
+
+      {!username ? (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Enter unique name"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="px-3 py-2 border rounded"
+          />
+          <button
+            onClick={handleRegister}
+            className="bg-blue-600 text-white px-4 py-2 rounded"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            Join
+          </button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      ) : (
+        <div className="w-full max-w-md">
+          <h2 className="text-lg font-semibold mb-2">Available Users</h2>
+          <ul className="space-y-2">
+            {connectedUsers.map((user) => (
+              <li key={user} className="flex justify-between items-center border-b pb-1">
+                <span>{user}</span>
+                <button
+                  onClick={() => callUser(user)}
+                  disabled={isCalling}
+                  className="bg-green-600 text-white px-3 py-1 rounded disabled:opacity-50"
+                >
+                  Call
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex flex-col md:flex-row gap-10 mt-6">
+        <div>
+          <h2 className="text-lg font-medium mb-2">Local Audio</h2>
+          <audio ref={localAudioRef} autoPlay controls className="w-64" />
+        </div>
+
+        <div>
+          <h2 className="text-lg font-medium mb-2">Remote Audio</h2>
+          <audio ref={remoteAudioRef} autoPlay controls className="w-64" />
+        </div>
+      </div>
     </div>
   );
 }
