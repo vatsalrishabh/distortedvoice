@@ -14,7 +14,7 @@ export default function handler(req, res) {
   if (!res.socket.server.io) {
     console.log("Initializing Socket.io...");
     io = new Server(res.socket.server, {
-      path: "/api", // <-- update this line to match frontend
+      path: "/api",
       addTrailingSlash: false,
       cors: {
         origin: "*",
@@ -27,8 +27,8 @@ export default function handler(req, res) {
     io.on("connection", (socket) => {
       console.log("New client connected:", socket.id);
 
+      // Register username
       socket.on("register", (username) => {
-        if ([...users.values()].includes(socket.id)) return;
         if ([...users.keys()].includes(username)) {
           socket.emit("username-error", "Username already taken");
         } else {
@@ -38,8 +38,8 @@ export default function handler(req, res) {
         }
       });
 
+      // Offer to start a call
       socket.on("offer", ({ to, offer }) => {
-        // Prevent users from being in multiple calls
         if (calls.has(socket.username) || calls.has(to)) {
           socket.emit("call-error", "One of the users is already in a call.");
           return;
@@ -52,20 +52,32 @@ export default function handler(req, res) {
         }
       });
 
+      // Answer a call
       socket.on("answer", ({ to, answer }) => {
         const targetId = users.get(to);
         if (targetId) io.to(targetId).emit("answer", { answer });
       });
 
+      // ICE candidate exchange
       socket.on("ice-candidate", ({ to, candidate }) => {
         const targetId = users.get(to);
         if (targetId) io.to(targetId).emit("ice-candidate", { candidate });
       });
 
+      // End call (manual)
+      socket.on("end-call", ({ to }) => {
+        calls.delete(socket.username);
+        calls.delete(to);
+        const targetId = users.get(to);
+        if (targetId) {
+          io.to(targetId).emit("call-ended");
+        }
+      });
+
+      // Handle disconnect
       socket.on("disconnect", () => {
         console.log("Client disconnected:", socket.id);
         if (socket.username) {
-          // Remove from users
           users.delete(socket.username);
           // End any active call
           const peer = calls.get(socket.username);
@@ -79,16 +91,6 @@ export default function handler(req, res) {
           calls.delete(socket.username);
         }
         io.emit("users", [...users.keys()]);
-      });
-
-      // Optional: handle manual call end (if you add this on frontend)
-      socket.on("end-call", ({ to }) => {
-        calls.delete(socket.username);
-        calls.delete(to);
-        const targetId = users.get(to);
-        if (targetId) {
-          io.to(targetId).emit("call-ended");
-        }
       });
     });
   } else {

@@ -10,12 +10,16 @@ export default function Home() {
   const localAudioRef = useRef();
   const remoteAudioRef = useRef();
   const pcRef = useRef(null);
-  const [username, setUsername] = useState("");
-  const [connectedUsers, setConnectedUsers] = useState([]);
-  const [targetUser, setTargetUser] = useState("");
-  const [isCalling, setIsCalling] = useState(false);
-  const [inCall, setInCall] = useState(false); // Add a state to track if user is in a call
 
+  const [username, setUsername] = useState("");
+  const [registered, setRegistered] = useState(false);
+  const [connectedUsers, setConnectedUsers] = useState([]);
+  const [inCall, setInCall] = useState(false);
+  const [isCalling, setIsCalling] = useState(false);
+  const [incomingCall, setIncomingCall] = useState(null); // { from, offer }
+  const [targetUser, setTargetUser] = useState("");
+
+  // Register and user list logic
   useEffect(() => {
     socket.on("connect", () => {
       console.log("Connected to socket server");
@@ -27,37 +31,12 @@ export default function Home() {
 
     socket.on("username-error", (msg) => {
       alert(msg);
+      setRegistered(false);
       setUsername("");
     });
 
-    socket.on("offer", async ({ from, offer }) => {
-      setTargetUser(from);
-      setInCall(true);
-      if (!pcRef.current) createPeerConnection(from);
-      await pcRef.current.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await pcRef.current.createAnswer();
-      await pcRef.current.setLocalDescription(answer);
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const audioCtx = Tone.getContext().rawContext;
-      const source = audioCtx.createMediaStreamSource(stream);
-
-      // Apply different effect for the receiver
-      const effect = username < from
-        ? new Tone.PitchShift(5).toDestination()
-        : new Tone.PitchShift(-5).toDestination();
-
-      const dest = audioCtx.createMediaStreamDestination();
-      source.connect(effect._input);
-      effect._output.connect(dest);
-
-      dest.stream.getTracks().forEach((track) => {
-        pcRef.current.addTrack(track, dest.stream);
-      });
-
-      localAudioRef.current.srcObject = stream;
-
-      socket.emit("answer", { to: from, answer });
+    socket.on("offer", ({ from, offer }) => {
+      setIncomingCall({ from, offer });
     });
 
     socket.on("answer", async ({ answer }) => {
@@ -71,15 +50,36 @@ export default function Home() {
         console.error("Error adding ICE candidate", e);
       }
     });
+
+    socket.on("call-ended", () => {
+      setInCall(false);
+      setIsCalling(false);
+      setIncomingCall(null);
+      setTargetUser("");
+      if (pcRef.current) {
+        pcRef.current.close();
+        pcRef.current = null;
+      }
+      if (localAudioRef.current) localAudioRef.current.srcObject = null;
+      if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
+    });
+
+    return () => {
+      socket.off("users");
+      socket.off("username-error");
+      socket.off("offer");
+      socket.off("answer");
+      socket.off("ice-candidate");
+      socket.off("call-ended");
+    };
   }, [username]);
 
+  // Peer connection setup
   const createPeerConnection = (to) => {
     pcRef.current = new RTCPeerConnection();
-
     pcRef.current.ontrack = (event) => {
       remoteAudioRef.current.srcObject = event.streams[0];
     };
-
     pcRef.current.onicecandidate = (event) => {
       if (event.candidate) {
         socket.emit("ice-candidate", { to, candidate: event.candidate });
@@ -87,28 +87,31 @@ export default function Home() {
     };
   };
 
-  const handleRegister = () => {
-    if (username) {
+  // Register handler
+  const handleRegister = (e) => {
+    e.preventDefault();
+    if (username.length >= 3) {
       socket.emit("register", username);
+      setRegistered(true);
     }
   };
 
-  // Modify callUser to prevent multiple calls and apply different effects
+  // Call user
   const callUser = async (user) => {
-    if (inCall) return;
+    if (inCall || isCalling) return;
     setTargetUser(user);
-    createPeerConnection(user);
     setIsCalling(true);
     setInCall(true);
+    createPeerConnection(user);
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const audioCtx = Tone.getContext().rawContext;
     const source = audioCtx.createMediaStreamSource(stream);
 
-    // Apply different effects based on who initiated the call
+    // Different effect for each user
     const effect = username < user
-      ? new Tone.PitchShift(5).toDestination()   // User A: pitch up
-      : new Tone.PitchShift(-5).toDestination(); // User B: pitch down
+      ? new Tone.PitchShift(5).toDestination()
+      : new Tone.PitchShift(-5).toDestination();
 
     const dest = audioCtx.createMediaStreamDestination();
     source.connect(effect._input);
@@ -125,57 +128,160 @@ export default function Home() {
     socket.emit("offer", { to: user, offer });
   };
 
+  // Accept incoming call
+  const acceptCall = async () => {
+    setInCall(true);
+    setTargetUser(incomingCall.from);
+    createPeerConnection(incomingCall.from);
+
+    await pcRef.current.setRemoteDescription(new RTCSessionDescription(incomingCall.offer));
+    const answer = await pcRef.current.createAnswer();
+    await pcRef.current.setLocalDescription(answer);
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const audioCtx = Tone.getContext().rawContext;
+    const source = audioCtx.createMediaStreamSource(stream);
+
+    // Different effect for each user
+    const effect = username < incomingCall.from
+      ? new Tone.PitchShift(5).toDestination()
+      : new Tone.PitchShift(-5).toDestination();
+
+    const dest = audioCtx.createMediaStreamDestination();
+    source.connect(effect._input);
+    effect._output.connect(dest);
+
+    dest.stream.getTracks().forEach((track) => {
+      pcRef.current.addTrack(track, dest.stream);
+    });
+
+    localAudioRef.current.srcObject = stream;
+
+    socket.emit("answer", { to: incomingCall.from, answer });
+    setIncomingCall(null);
+  };
+
+  // Decline call
+  const declineCall = () => {
+    setIncomingCall(null);
+  };
+
+  // End call
+  const endCall = () => {
+    socket.emit("end-call", { to: targetUser });
+    setInCall(false);
+    setIsCalling(false);
+    setTargetUser("");
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
+    }
+    if (localAudioRef.current) localAudioRef.current.srcObject = null;
+    if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen gap-6 p-8">
-      <h1 className="text-2xl font-bold">Voice Changer Call</h1>
+      <h1 className="text-2xl font-bold mb-4">Voice Changer Call</h1>
 
-      {!username ? (
-        <div className="flex gap-2">
+      {/* Username registration */}
+      {!registered ? (
+        <form onSubmit={handleRegister} className="flex gap-2">
           <input
             type="text"
             placeholder="Enter unique name"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className="px-3 py-2 border rounded"
+            minLength={3}
+            required
           />
           <button
-            onClick={handleRegister}
+            type="submit"
             className="bg-blue-600 text-white px-4 py-2 rounded"
+            disabled={username.length < 3}
           >
-            Join
+            Submit
           </button>
-        </div>
+        </form>
       ) : (
-        <div className="w-full max-w-md">
-          <h2 className="text-lg font-semibold mb-2">Available Users</h2>
-          <ul className="space-y-2">
-            {connectedUsers.map((user) => (
-              <li key={user} className="flex justify-between items-center border-b pb-1">
-                <span>{user}</span>
-                <button
-                  onClick={() => callUser(user)}
-                  disabled={isCalling || inCall}
-                  className="bg-green-600 text-white px-3 py-1 rounded disabled:opacity-50"
-                >
-                  Call
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <>
+          {/* User list */}
+          <div className="w-full max-w-md">
+            <h2 className="text-lg font-semibold mb-2">Users Online</h2>
+            <ul className="space-y-2">
+              {connectedUsers.length === 0 && (
+                <li className="text-gray-500">No users available</li>
+              )}
+              {connectedUsers.map((user) => (
+                <li key={user} className="flex justify-between items-center border-b pb-1">
+                  <span>{user}</span>
+                  <button
+                    onClick={() => callUser(user)}
+                    disabled={isCalling || inCall}
+                    className="bg-green-600 text-white px-3 py-1 rounded disabled:opacity-50"
+                    title="Call"
+                  >
+                    📞
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Incoming call modal */}
+          {incomingCall && (
+            <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+              <div className="bg-white p-6 rounded shadow-lg flex flex-col items-center">
+                <p className="mb-4 font-semibold">
+                  Incoming call from <span className="text-blue-600">{incomingCall.from}</span>
+                </p>
+                <div className="flex gap-4">
+                  <button
+                    onClick={acceptCall}
+                    className="bg-green-600 text-white px-4 py-2 rounded"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={declineCall}
+                    className="bg-red-600 text-white px-4 py-2 rounded"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Call controls */}
+          {inCall && (
+            <div className="flex flex-col items-center gap-2 mt-4">
+              <span className="font-medium text-green-700">
+                In call with {targetUser}
+              </span>
+              <button
+                onClick={endCall}
+                className="bg-red-600 text-white px-4 py-2 rounded"
+              >
+                End Call
+              </button>
+            </div>
+          )}
+
+          {/* Audio panels */}
+          <div className="flex flex-col md:flex-row gap-10 mt-6">
+            <div>
+              <h2 className="text-lg font-medium mb-2">Local Audio</h2>
+              <audio ref={localAudioRef} autoPlay controls className="w-64" />
+            </div>
+            <div>
+              <h2 className="text-lg font-medium mb-2">Remote Audio</h2>
+              <audio ref={remoteAudioRef} autoPlay controls className="w-64" />
+            </div>
+          </div>
+        </>
       )}
-
-      <div className="flex flex-col md:flex-row gap-10 mt-6">
-        <div>
-          <h2 className="text-lg font-medium mb-2">Local Audio</h2>
-          <audio ref={localAudioRef} autoPlay controls className="w-64" />
-        </div>
-
-        <div>
-          <h2 className="text-lg font-medium mb-2">Remote Audio</h2>
-          <audio ref={remoteAudioRef} autoPlay controls className="w-64" />
-        </div>
-      </div>
     </div>
   );
 }
