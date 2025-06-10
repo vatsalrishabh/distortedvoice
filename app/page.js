@@ -104,24 +104,27 @@ export default function Home() {
     setInCall(true);
     createPeerConnection(user);
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const audioCtx = Tone.getContext().rawContext;
-    const source = audioCtx.createMediaStreamSource(stream);
+    await Tone.start(); // Ensure Tone.js is started
+
+    const source = new Tone.UserMedia();
+    await source.open(); // This will ask for mic permission
 
     // Different effect for each user
     const effect = username < user
       ? new Tone.PitchShift(5).toDestination()
       : new Tone.PitchShift(-5).toDestination();
 
-    const dest = audioCtx.createMediaStreamDestination();
-    source.connect(effect._input);
-    effect._output.connect(dest);
+    source.connect(effect);
+
+    // Get the processed stream for WebRTC
+    const dest = Tone.context.createMediaStreamDestination();
+    effect.connect(dest);
 
     dest.stream.getTracks().forEach((track) => {
       pcRef.current.addTrack(track, dest.stream);
     });
 
-    localAudioRef.current.srcObject = stream;
+    localAudioRef.current.srcObject = source._stream;
 
     const offer = await pcRef.current.createOffer();
     await pcRef.current.setLocalDescription(offer);
@@ -138,24 +141,27 @@ export default function Home() {
     const answer = await pcRef.current.createAnswer();
     await pcRef.current.setLocalDescription(answer);
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const audioCtx = Tone.getContext().rawContext;
-    const source = audioCtx.createMediaStreamSource(stream);
+    await Tone.start(); // Ensure Tone.js is started
+
+    const source = new Tone.UserMedia();
+    await source.open(); // This will ask for mic permission
 
     // Different effect for each user
     const effect = username < incomingCall.from
       ? new Tone.PitchShift(5).toDestination()
       : new Tone.PitchShift(-5).toDestination();
 
-    const dest = audioCtx.createMediaStreamDestination();
-    source.connect(effect._input);
-    effect._output.connect(dest);
+    source.connect(effect);
+
+    // Get the processed stream for WebRTC
+    const dest = Tone.context.createMediaStreamDestination();
+    effect.connect(dest);
 
     dest.stream.getTracks().forEach((track) => {
       pcRef.current.addTrack(track, dest.stream);
     });
 
-    localAudioRef.current.srcObject = stream;
+    localAudioRef.current.srcObject = source._stream;
 
     socket.emit("answer", { to: incomingCall.from, answer });
     setIncomingCall(null);
