@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import io from "socket.io-client";
 import * as Tone from "tone";
 
-const socket = io(undefined, { path: "/api" });
+const socket = io("https://distortedvoice-express.onrender.com");
 
 export default function Home() {
   const localAudioRef = useRef();
