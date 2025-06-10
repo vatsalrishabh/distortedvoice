@@ -49,7 +49,12 @@ export default function Home() {
 
     socket.on("ice-candidate", async ({ candidate }) => {
       try {
-        await pcRef.current.addIceCandidate(candidate);
+        if (pcRef.current) {
+          await pcRef.current.addIceCandidate(candidate);
+        } else {
+          // Optionally, queue candidates and add them after connection is created
+          console.warn("PeerConnection not ready, ICE candidate dropped");
+        }
       } catch (e) {
         console.error("Error adding ICE candidate", e);
       }
