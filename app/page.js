@@ -14,6 +14,7 @@ export default function Home() {
   const [connectedUsers, setConnectedUsers] = useState([]);
   const [targetUser, setTargetUser] = useState("");
   const [isCalling, setIsCalling] = useState(false);
+  const [inCall, setInCall] = useState(false); // Add a state to track if user is in a call
 
   useEffect(() => {
     socket.on("connect", () => {
@@ -31,10 +32,31 @@ export default function Home() {
 
     socket.on("offer", async ({ from, offer }) => {
       setTargetUser(from);
+      setInCall(true);
       if (!pcRef.current) createPeerConnection(from);
       await pcRef.current.setRemoteDescription(new RTCSessionDescription(offer));
       const answer = await pcRef.current.createAnswer();
       await pcRef.current.setLocalDescription(answer);
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioCtx = Tone.getContext().rawContext;
+      const source = audioCtx.createMediaStreamSource(stream);
+
+      // Apply different effect for the receiver
+      const effect = username < from
+        ? new Tone.PitchShift(5).toDestination()
+        : new Tone.PitchShift(-5).toDestination();
+
+      const dest = audioCtx.createMediaStreamDestination();
+      source.connect(effect._input);
+      effect._output.connect(dest);
+
+      dest.stream.getTracks().forEach((track) => {
+        pcRef.current.addTrack(track, dest.stream);
+      });
+
+      localAudioRef.current.srcObject = stream;
+
       socket.emit("answer", { to: from, answer });
     });
 
@@ -71,22 +93,26 @@ export default function Home() {
     }
   };
 
+  // Modify callUser to prevent multiple calls and apply different effects
   const callUser = async (user) => {
+    if (inCall) return;
     setTargetUser(user);
     createPeerConnection(user);
     setIsCalling(true);
+    setInCall(true);
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const audioCtx = Tone.getContext().rawContext;
     const source = audioCtx.createMediaStreamSource(stream);
 
-    // Pitch shifting using Tone.js
-    const pitchShift = new Tone.PitchShift(5).toDestination(); // 5 semitones up
-    const dest = audioCtx.createMediaStreamDestination();
+    // Apply different effects based on who initiated the call
+    const effect = username < user
+      ? new Tone.PitchShift(5).toDestination()   // User A: pitch up
+      : new Tone.PitchShift(-5).toDestination(); // User B: pitch down
 
-    // Connect source to pitch shifter and then to destination
-    source.connect(pitchShift._input);
-    pitchShift._output.connect(dest);
+    const dest = audioCtx.createMediaStreamDestination();
+    source.connect(effect._input);
+    effect._output.connect(dest);
 
     dest.stream.getTracks().forEach((track) => {
       pcRef.current.addTrack(track, dest.stream);
@@ -128,7 +154,7 @@ export default function Home() {
                 <span>{user}</span>
                 <button
                   onClick={() => callUser(user)}
-                  disabled={isCalling}
+                  disabled={isCalling || inCall}
                   className="bg-green-600 text-white px-3 py-1 rounded disabled:opacity-50"
                 >
                   Call
