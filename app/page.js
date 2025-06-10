@@ -18,6 +18,8 @@ export default function Home() {
   const [isCalling, setIsCalling] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null); // { from, offer }
   const [targetUser, setTargetUser] = useState("");
+  const [isMuted, setIsMuted] = useState(false);
+  const [localStream, setLocalStream] = useState(null);
 
   // Register and user list logic
   useEffect(() => {
@@ -125,6 +127,7 @@ export default function Home() {
     });
 
     localAudioRef.current.srcObject = source._stream;
+    setLocalStream(dest.stream);
 
     const offer = await pcRef.current.createOffer();
     await pcRef.current.setLocalDescription(offer);
@@ -162,6 +165,7 @@ export default function Home() {
     });
 
     localAudioRef.current.srcObject = source._stream;
+    setLocalStream(dest.stream);
 
     socket.emit("answer", { to: incomingCall.from, answer });
     setIncomingCall(null);
@@ -184,6 +188,16 @@ export default function Home() {
     }
     if (localAudioRef.current) localAudioRef.current.srcObject = null;
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
+  };
+
+  // Mute/unmute handler
+  const toggleMute = () => {
+    if (localStream) {
+      localStream.getAudioTracks().forEach(track => {
+        track.enabled = !track.enabled;
+      });
+      setIsMuted(!isMuted);
+    }
   };
 
   return (
@@ -266,6 +280,12 @@ export default function Home() {
               <span className="font-medium text-green-700">
                 In call with {targetUser}
               </span>
+              <button
+                onClick={toggleMute}
+                className={`px-4 py-2 rounded ${isMuted ? "bg-yellow-500" : "bg-gray-600"} text-white`}
+              >
+                {isMuted ? "Unmute" : "Mute"}
+              </button>
               <button
                 onClick={endCall}
                 className="bg-red-600 text-white px-4 py-2 rounded"
