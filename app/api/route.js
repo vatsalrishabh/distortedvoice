@@ -13,7 +13,7 @@ export default function handler(req, res) {
   if (!res.socket.server.io) {
     console.log("Initializing Socket.io...");
     io = new Server(res.socket.server, {
-      path: "/api/socket",
+      path: "/api", // <-- update this line to match frontend
       addTrailingSlash: false,
       cors: {
         origin: "*",

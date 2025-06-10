@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import io from "socket.io-client";
-import VoiceChanger from "voice-changer";
+import * as Tone from "tone";
 
-const socket = io(undefined, { path: "/api/socket" });
+const socket = io(undefined, { path: "/api" });
 
 export default function Home() {
   const localAudioRef = useRef();
@@ -77,17 +77,16 @@ export default function Home() {
     setIsCalling(true);
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const audioCtx = new AudioContext();
+    const audioCtx = Tone.getContext().rawContext;
     const source = audioCtx.createMediaStreamSource(stream);
 
-    const voiceChanger = new VoiceChanger(audioCtx);
-    voiceChanger.setPitch(1.5); // example pitch
-    voiceChanger.setFormant(1.2);
-    voiceChanger.setWet(1.0);
-    voiceChanger.connect(source);
-
+    // Pitch shifting using Tone.js
+    const pitchShift = new Tone.PitchShift(5).toDestination(); // 5 semitones up
     const dest = audioCtx.createMediaStreamDestination();
-    voiceChanger.output.connect(dest);
+
+    // Connect source to pitch shifter and then to destination
+    source.connect(pitchShift._input);
+    pitchShift._output.connect(dest);
 
     dest.stream.getTracks().forEach((track) => {
       pcRef.current.addTrack(track, dest.stream);
