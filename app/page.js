@@ -99,11 +99,11 @@ export default function Home() {
     await source.open();
 
     const pitchValue = username < user ? 5 : -5;
-    const effect = new Tone.PitchShift(pitchValue); // ❌ Do NOT connect to destination
+    const effect = new Tone.PitchShift(pitchValue);
+    const dest = Tone.context.createMediaStreamDestination();
 
     source.connect(effect);
-    const dest = Tone.context.createMediaStreamDestination();
-    effect.connect(dest);
+    effect.connect(dest); // ✅ Important!
 
     dest.stream.getTracks().forEach((track) => {
       pcRef.current.addTrack(track, dest.stream);
@@ -128,11 +128,11 @@ export default function Home() {
     await source.open();
 
     const pitchValue = username < incomingCall.from ? 5 : -5;
-    const effect = new Tone.PitchShift(pitchValue); // ❌ No .toDestination()
+    const effect = new Tone.PitchShift(pitchValue);
+    const dest = Tone.context.createMediaStreamDestination();
 
     source.connect(effect);
-    const dest = Tone.context.createMediaStreamDestination();
-    effect.connect(dest);
+    effect.connect(dest); // ✅ Important!
 
     dest.stream.getTracks().forEach((track) => {
       pcRef.current.addTrack(track, dest.stream);
@@ -253,7 +253,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Remote audio playback only */}
             <div className="flex justify-center mt-8">
               <div className="bg-white/10 rounded-xl p-4 shadow-lg flex flex-col items-center border border-white/20">
                 <h2 className="text-lg font-medium mb-2 text-white/80">Their Voice</h2>
