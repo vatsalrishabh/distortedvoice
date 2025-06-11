@@ -98,9 +98,8 @@ export default function Home() {
     const source = new Tone.UserMedia();
     await source.open();
 
-    const effect = username < user
-      ? new Tone.PitchShift(5).toDestination()
-      : new Tone.PitchShift(-5).toDestination();
+    const pitchValue = username < user ? 5 : -5;
+    const effect = new Tone.PitchShift(pitchValue); // ❌ Do NOT connect to destination
 
     source.connect(effect);
     const dest = Tone.context.createMediaStreamDestination();
@@ -128,9 +127,8 @@ export default function Home() {
     const source = new Tone.UserMedia();
     await source.open();
 
-    const effect = username < incomingCall.from
-      ? new Tone.PitchShift(5).toDestination()
-      : new Tone.PitchShift(-5).toDestination();
+    const pitchValue = username < incomingCall.from ? 5 : -5;
+    const effect = new Tone.PitchShift(pitchValue); // ❌ No .toDestination()
 
     source.connect(effect);
     const dest = Tone.context.createMediaStreamDestination();
